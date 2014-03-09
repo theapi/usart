@@ -1,3 +1,8 @@
+Release/
+.settings/
+.cproject
+.project
+
 # Object files
 *.o
 *.ko
