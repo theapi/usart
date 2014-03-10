@@ -4,16 +4,16 @@
 #include <avr/interrupt.h>
 
 #define FOSC 16000000 // Clock Speed
-//#define BAUD 19200     // datasheet p203 shows error rate of 0.2%
+//#define BAUD 9600
+#define BAUD 19200     // datasheet p203 shows error rate of 0.2%
 //#define BAUD 38400
-#define BAUD 57600 // datasheet p203 shows error rate of 2.1% (cannot currently get higher rates to work)
-
-
+//#define BAUD 57600 // datasheet p203 shows error rate of 2.1% (cannot currently get higher rates to work)
 #define UBRR (FOSC/16/BAUD-1)
 
 #define PIN_LED    PB0 // The led to blink
 #define COMPARE_REG 249 // OCR0A when to interupt (datasheet: 14.9.4)
 #define T1 1000 // timeout value for the blink (mSec)
+#define RX_BUFFER_LEN 10 // How many bytes the usart receive buffers can hold
 
 /********************************************************************************
 Function Prototypes
@@ -27,10 +27,10 @@ void USART_Transmit( unsigned char data );
 Global Variables
 ********************************************************************************/
 
-volatile unsigned char flag_usart_rx;
-volatile unsigned char received_byte;
 volatile unsigned int time1;
-
+volatile unsigned char rx_buffer[RX_BUFFER_LEN];
+volatile unsigned char rx_buffer_index;
+unsigned char rx_buffer_index_read; // The last buffer byte processed
 
 /********************************************************************************
 Interupt Routines
@@ -47,15 +47,15 @@ ISR(TIMER0_COMPA_vect)
  */
 ISR(USART_RX_vect)
 {
-   // Fetch the received byte value, which also clears the interrupt flag.
-   received_byte = UDR0;
+   // Add to the receive buffer
+   rx_buffer[rx_buffer_index] = UDR0;
 
-   // @todo buffer bytes to be processed later
+   // Increment the index
+   rx_buffer_index++;
+   if (rx_buffer_index >= RX_BUFFER_LEN) {
+       rx_buffer_index = 0;
+   }
 
-   // Flag that a byte has been received.
-   //flag_usart_rx = 1;
-
-   UDR0 = received_byte;
 }
 
 /********************************************************************************
@@ -75,14 +75,17 @@ int main (void)
 	// main loop
     while(1) {
 
-        // Check if there is any serial data to process.
-        if (flag_usart_rx) {
-            flag_usart_rx = 0;
-            // Send the usart received byte back where it came from.
-            //USART_Transmit('-');
-            //USART_Transmit(received_byte);
+        // Handle unprocessed received serial data.
+        // If the processed index is out of sync with the ISR index
+        // then there is processing to do.
+        if (rx_buffer_index != rx_buffer_index_read) {
+            USART_Transmit(rx_buffer[rx_buffer_index_read]);
 
-            //@todo: send buffered bytes
+            // Increase the processed index
+            rx_buffer_index_read++;
+            if (rx_buffer_index_read >= RX_BUFFER_LEN) {
+                rx_buffer_index_read = 0;
+            }
         }
 
         if (time1 == 0) {
@@ -90,6 +93,8 @@ int main (void)
             time1 = T1;
             // toggle the led
             PORTB ^= (1 << PB0);
+
+            // Heartbeat
             USART_Transmit('-');
             USART_Transmit(0x0a); // new line (to keep my python script happy)
         }
