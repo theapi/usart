@@ -7,15 +7,8 @@
 #define BAUD 9600     // datasheet p203 shows error rate of 0.2%
 #define UBRR (FOSC/16/BAUD-1)
 
-
 #define PIN_LED    PB0 // The led to blink
-
-
-// 32 * 0.000004 = 0.000128 so ISR gets called every 128us
-// 32 * 0.000004 * 8 = 0.001024 = about 1khz for whole matrix (NB zero based so register one less)
-#define COMPARE_REG 31 // OCR0A when to interupt (datasheet: 14.9.4)
-#define MILLIS_TICKS 8  // number of ISR calls before a millisecond is counted (ish)
-#define T1 1000 * MILLIS_TICKS // timeout value (mSec)
+#define COMPARE_REG 249 // OCR0A when to interupt (datasheet: 14.9.4)
 
 /********************************************************************************
 Function Prototypes
@@ -29,28 +22,38 @@ void USART_Transmit( unsigned char data );
 Global Variables
 ********************************************************************************/
 
-unsigned char data = '0';
+volatile unsigned char flag_usart_rx;
+volatile unsigned char received_byte;
 
-volatile unsigned int time1;
 
 /********************************************************************************
 Interupt Routines
 ********************************************************************************/
 
 //timer 0 compare ISR
-ISR (TIMER0_COMPA_vect)
+ISR(TIMER0_COMPA_vect)
 {
-	// Decrement the time if not already zero
-    if (time1 > 0)  --time1;
+    // toggle the led
+    PORTB ^= (1 << PIN_LED);
+}
+
+/**
+ * Interrupt when the USART receives a byte.
+ */
+ISR(USART_RX_vect)
+{
+   // Fetch the received byte value, which also clears the interrupt flag.
+   received_byte = UDR0;
+
+   // Flag that a byte has been received.
+   flag_usart_rx = 1;
 }
 
 /********************************************************************************
 Main
 ********************************************************************************/
-int
-main (void)
+int main (void)
 {
-
 	DDRB = 0xFF; // set all to output
 	PORTB = 0; // all off
 
@@ -63,22 +66,12 @@ main (void)
 	// main loop
     while(1) {
 
-    	if (time1 == 0) {
-    		// reset the timer
-    		time1 = T1;
-
-    		if (data == '0') {
-    		    data = '1';
-    		} else {
-    		    data = '0';
-    		}
-
-    		USART_Transmit(data);
-    		USART_Transmit(0x0a); // new line
-
-    		// toggle the led
-    		PORTB ^= (1 << PIN_LED);
-    	}
+        // Check if there is any serial data to process.
+        if (flag_usart_rx) {
+            flag_usart_rx = 0;
+            // Send the usart received byte back where it came from.
+            USART_Transmit(received_byte);
+        }
 
     }
 }
@@ -90,24 +83,23 @@ Functions
 void USART_Init(void)
 {
     UBRR0H = (UBRR >> 8); // Load upper 8-bits of the baud rate value into the high byte of the UBRR register
-    UBRR0L = UBRR; // Load lower 8-bits of the baud rate value into the low byte of the UBRR register
+    UBRR0L = UBRR;        // Load lower 8-bits of the baud rate value into the low byte of the UBRR register
 
     // Use 8-bit character sizes & 1 stop bit
     UCSR0C = (0 << USBS0) | (1 << UCSZ00) | (1 << UCSZ01);
 
-    // Enable receiver and transmitter
-    UCSR0B = (1<<RXEN0)|(1<<TXEN0);
+    // Enable receiver and transmitter and interrupt on receive.
+    UCSR0B = (1 << RXCIE0) | (1 << RXEN0) | (1 << TXEN0);
 }
 
 void USART_Transmit( unsigned char data )
 {
     // Wait for empty transmit buffer
-    while ( !( UCSR0A & (1<<UDRE0)) )
+    while ( !( UCSR0A & (1 << UDRE0)) )
         ;
     // Put data into buffer, sends the data
     UDR0 = data;
 }
-
 
 void initTimer(void)
 {
@@ -134,6 +126,4 @@ void initTimer(void)
 	// 1 / (16000000 / 64 / 250) = 0.001 = 1ms
 	TCCR0B = ((1 << CS10) | (1 << CS11)); // (0b00000011)(3) clock prescalar to 64
 
-	// Timer initialization
-    time1 = T1;
 }
