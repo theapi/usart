@@ -30,8 +30,8 @@ Global Variables
 
 volatile unsigned int time1;
 volatile unsigned char rx_buffer[RX_BUFFER_LEN];
-volatile unsigned char rx_buffer_index;
-unsigned char rx_buffer_index_read; // The last buffer byte processed
+volatile unsigned char rx_head;
+unsigned char rx_tail; // The last buffer byte processed
 
 volatile unsigned char tx_buffer[TX_BUFFER_LEN];
 volatile unsigned char tx_head;
@@ -53,12 +53,12 @@ ISR(TIMER0_COMPA_vect)
 ISR(USART_RX_vect)
 {
    // Add to the receive buffer
-   rx_buffer[rx_buffer_index] = UDR0;
+   rx_buffer[rx_head] = UDR0;
 
    // Increment the index
-   rx_buffer_index++;
-   if (rx_buffer_index >= RX_BUFFER_LEN) {
-       rx_buffer_index = 0;
+   rx_head++;
+   if (rx_head >= RX_BUFFER_LEN) {
+       rx_head = 0;
    }
 }
 
@@ -99,13 +99,13 @@ int main (void)
         // Handle unprocessed received serial data.
         // If the processed index is out of sync with the ISR index
         // then there is processing to do.
-        if (rx_buffer_index != rx_buffer_index_read) {
-            USART_Transmit(rx_buffer[rx_buffer_index_read]);
+        if (rx_head != rx_tail) {
+            USART_Transmit(rx_buffer[rx_tail]);
 
             // Increase the processed index
-            rx_buffer_index_read++;
-            if (rx_buffer_index_read >= RX_BUFFER_LEN) {
-                rx_buffer_index_read = 0;
+            rx_tail++;
+            if (rx_tail >= RX_BUFFER_LEN) {
+                rx_tail = 0;
             }
         }
 
