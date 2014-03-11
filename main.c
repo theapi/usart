@@ -3,12 +3,17 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-#define FOSC 16000000 // Clock Speed
+
+//#define FOSC 16000000 // Clock Speed
 //#define BAUD 9600
-#define BAUD 19200     // datasheet p203 shows error rate of 0.2%
+//#define BAUD 19200     // datasheet p203 shows error rate of 0.2%
 //#define BAUD 38400
 //#define BAUD 57600 // datasheet p203 shows error rate of 2.1% (cannot currently get higher rates to work)
-#define UBRR (FOSC/16/BAUD-1)
+//#define UBRR (FOSC/16/BAUD-1)
+
+
+#define BAUD 115200 // Works when using <util/setbaud.h> :)
+#include <util/setbaud.h>
 
 #define PIN_LED    PB5 // The led to blink
 #define COMPARE_REG 249 // OCR0A when to interupt (datasheet: 14.9.4)
@@ -117,7 +122,8 @@ int main (void)
 
             // Heartbeat
             USART_Transmit('-');
-            USART_Transmit(0x0a); // new line
+            USART_Transmit('\n');
+            //USART_Transmit(0x0a); // new line
         }
 
     }
@@ -129,8 +135,17 @@ Functions
 ********************************************************************************/
 void USART_Init(void)
 {
-    UBRR0H = (UBRR >> 8); // Load upper 8-bits of the baud rate value into the high byte of the UBRR register
-    UBRR0L = UBRR;        // Load lower 8-bits of the baud rate value into the low byte of the UBRR register
+    //UBRR0H = (UBRR >> 8); // Load upper 8-bits of the baud rate value into the high byte of the UBRR register
+    //UBRR0L = UBRR;        // Load lower 8-bits of the baud rate value into the low byte of the UBRR register
+
+    UBRR0H = UBRRH_VALUE;
+    UBRR0L = UBRRL_VALUE;
+
+    #if USE_2X
+        UCSR0A |= (1 << U2X0);
+    #else
+        UCSR0A &= ~(1 << U2X0);
+    #endif
 
     // Use 8-bit character sizes & 1 stop bit
     UCSR0C = (0 << USBS0) | (1 << UCSZ00) | (1 << UCSZ01);
