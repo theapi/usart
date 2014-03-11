@@ -10,10 +10,11 @@
 //#define BAUD 57600 // datasheet p203 shows error rate of 2.1% (cannot currently get higher rates to work)
 #define UBRR (FOSC/16/BAUD-1)
 
-#define PIN_LED    PB0 // The led to blink
+#define PIN_LED    PB5 // The led to blink
 #define COMPARE_REG 249 // OCR0A when to interupt (datasheet: 14.9.4)
 #define T1 1000 // timeout value for the blink (mSec)
-#define RX_BUFFER_LEN 10 // How many bytes the usart receive buffers can hold
+#define RX_BUFFER_LEN 10 // How many bytes the usart receive buffer can hold
+#define TX_BUFFER_LEN 64 // How many bytes the usart send buffer can hold
 
 /********************************************************************************
 Function Prototypes
@@ -31,6 +32,10 @@ volatile unsigned int time1;
 volatile unsigned char rx_buffer[RX_BUFFER_LEN];
 volatile unsigned char rx_buffer_index;
 unsigned char rx_buffer_index_read; // The last buffer byte processed
+
+volatile unsigned char tx_buffer[TX_BUFFER_LEN];
+volatile unsigned char tx_head;
+volatile unsigned char tx_tail;
 
 /********************************************************************************
 Interupt Routines
@@ -55,7 +60,23 @@ ISR(USART_RX_vect)
    if (rx_buffer_index >= RX_BUFFER_LEN) {
        rx_buffer_index = 0;
    }
+}
 
+/**
+ * Interrupt when the USART has sent a byte.
+ */
+ISR(USART_TX_vect)
+{
+    // If head & tail are not in sync, send the next byte in byte.
+    if (tx_head != tx_tail) {
+        UDR0 = tx_buffer[tx_tail];
+
+        // Increment the tail index
+        tx_tail++;
+        if (tx_tail >= TX_BUFFER_LEN) {
+            tx_tail = 0;
+        }
+    }
 }
 
 /********************************************************************************
@@ -92,11 +113,11 @@ int main (void)
             // reset the timer
             time1 = T1;
             // toggle the led
-            PORTB ^= (1 << PB0);
+            PORTB ^= (1 << PIN_LED);
 
             // Heartbeat
             USART_Transmit('-');
-            USART_Transmit(0x0a); // new line (to keep my python script happy)
+            USART_Transmit(0x0a); // new line
         }
 
     }
@@ -120,11 +141,27 @@ void USART_Init(void)
 
 void USART_Transmit( unsigned char data )
 {
+    if (tx_head == tx_tail) {
+        // Nothing waiting so send it now.
+        UDR0 = data;
+    } else {
+        // Buffer the byte to be sent by the ISR
+        tx_buffer[tx_head] = data;
+        // Increment the head index
+        tx_head++;
+        if (tx_head >= TX_BUFFER_LEN) {
+            tx_head = 0;
+        }
+    }
+
+
+    /*
     // Wait for empty transmit buffer
     while ( !( UCSR0A & (1 << UDRE0)) )
         ;
     // Put data into buffer, sends the data
     UDR0 = data;
+    */
 }
 
 void initTimer(void)
