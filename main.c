@@ -123,6 +123,8 @@ int main (void)
             // Heartbeat
             USART_Transmit('-');
             USART_Transmit('\n');
+            // @todo Need to have a transmit string since this only works for 2 bytes,
+            // probably to do with the head changing after it was checked.
             //USART_Transmit(0x0a); // new line
         }
 
