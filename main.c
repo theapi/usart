@@ -18,7 +18,7 @@
 #define PIN_LED    PB5 // The led to blink
 #define COMPARE_REG 249 // OCR0A when to interupt (datasheet: 14.9.4)
 #define T1 1000 // timeout value for the blink (mSec)
-#define RX_BUFFER_LEN 10 // How many bytes the usart receive buffer can hold
+#define RX_BUFFER_LEN 64 // How many bytes the usart receive buffer can hold
 #define TX_BUFFER_LEN 64 // How many bytes the usart send buffer can hold
 
 /********************************************************************************
@@ -68,21 +68,48 @@ ISR(USART_RX_vect)
 }
 
 /**
- * Interrupt when the USART has sent a byte.
+ * Interrupt when the USART is ready to send more bytes.
  */
-ISR(USART_TX_vect)
+ISR(USART_UDRE_vect)
 {
     // If head & tail are not in sync, send the next byte in byte.
     if (tx_head != tx_tail) {
-        UDR0 = tx_buffer[tx_tail];
+        PORTB |= (1 << PIN_LED); // Proof the interrupt is on
 
+        UDR0 = tx_buffer[tx_tail];
         // Increment the tail index
         tx_tail++;
         if (tx_tail >= TX_BUFFER_LEN) {
             tx_tail = 0;
         }
+    } else {
+        PORTB &= ~(1 << PIN_LED); // Proof the interrupt is off
+
+        // Nothing left to send so turn off this interrupt
+        UCSR0B &= ~(1 << UDRIE0);
     }
 }
+
+
+/**
+ * Interrupt when the USART has sent a byte.
+ */
+/*
+ISR(USART_TX_vect)
+{
+    // If head & tail are not in sync, send the next byte in byte.
+    if (tx_head != tx_tail) {
+        char c = tx_buffer[tx_tail];
+        // Increment the tail index
+        tx_tail++;
+        if (tx_tail >= TX_BUFFER_LEN) {
+            tx_tail = 0;
+        }
+        // Now send the byte.
+        UDR0 = c;
+    }
+}
+*/
 
 /********************************************************************************
 Main
@@ -118,14 +145,14 @@ int main (void)
             // reset the timer
             time1 = T1;
             // toggle the led
-            PORTB ^= (1 << PIN_LED);
+            //PORTB ^= (1 << PIN_LED);
 
-            // Heartbeat
+            // Heartbeat ( a few bytes to show it gets queued)
+            USART_Transmit(':');
             USART_Transmit('-');
+            USART_Transmit(')');
             USART_Transmit('\n');
-            // @todo Need to have a transmit string since this only works for 2 bytes,
-            // probably to do with the head changing after it was checked.
-            //USART_Transmit(0x0a); // new line
+
         }
 
     }
@@ -152,25 +179,22 @@ void USART_Init(void)
     // Use 8-bit character sizes & 1 stop bit
     UCSR0C = (0 << USBS0) | (1 << UCSZ00) | (1 << UCSZ01);
 
-    // Enable receiver, transmitter, interrupt on receive.
+    // Enable receiver, transmitter and interrupt on receive.
     UCSR0B = (1 << RXCIE0) | (1 << RXEN0) | (1 << TXEN0);
 }
 
 void USART_Transmit( unsigned char data )
 {
-    if (tx_head == tx_tail) {
-        // Nothing waiting so send it now.
-        UDR0 = data;
-    } else {
-        // Buffer the byte to be sent by the ISR
-        tx_buffer[tx_head] = data;
-        // Increment the head index
-        tx_head++;
-        if (tx_head >= TX_BUFFER_LEN) {
-            tx_head = 0;
-        }
+    // Buffer the byte to be sent by the ISR
+    tx_buffer[tx_head] = data;
+    // Increment the head index
+    tx_head++;
+    if (tx_head >= TX_BUFFER_LEN) {
+        tx_head = 0;
     }
 
+    // Ensure the interrupt to send this is on.
+    UCSR0B |= (1 << UDRIE0);
 
     /*
     // Wait for empty transmit buffer
@@ -186,7 +210,7 @@ void initTimer(void)
 	// set up timer 0 for 1 mSec ticks (timer 0 is an 8 bit timer)
 
 	// Interupt mask register - to enable the interupt (datasheet: 14.9.6)
-	// (Bit 1 – OCIE0A: Timer/Counter0 Output Compare Match A Interrupt Enable)
+	// (Bit 1 - OCIE0A: Timer/Counter0 Output Compare Match A Interrupt Enable)
 	TIMSK0 = (1 << OCIE0A); // (2) turn on timer 0 cmp match ISR
 
 	// Compare register - when to interupt (datasheet: 14.9.4)

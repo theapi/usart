@@ -1,6 +1,6 @@
 import serial
 
-s = serial.Serial(port='/dev/ttyUSB0', baudrate=19200)
+s = serial.Serial(port='/dev/ttyUSB0', baudrate=115200)
 print s
 while True:
     line = s.readline()
