@@ -12,14 +12,14 @@
 //#define UBRR (FOSC/16/BAUD-1)
 
 
-#define BAUD 115200 // Works when using <util/setbaud.h> :)
+#define BAUD 57600
 #include <util/setbaud.h>
 
 #define PIN_LED    PB5 // The led to blink
 #define COMPARE_REG 249 // OCR0A when to interupt (datasheet: 14.9.4)
 #define T1 1000 // timeout value for the blink (mSec)
-#define RX_BUFFER_LEN 64 // How many bytes the usart receive buffer can hold
-#define TX_BUFFER_LEN 64 // How many bytes the usart send buffer can hold
+#define RX_BUFFER_LEN 64 // How many bytes the usart receive buffer can hold (must a power of 2)
+#define TX_BUFFER_LEN 64 // How many bytes the usart send buffer can hold (must a power of 2)
 
 /********************************************************************************
 Function Prototypes
@@ -61,10 +61,14 @@ ISR(USART_RX_vect)
    rx_buffer[rx_head] = UDR0;
 
    // Increment the index
+   rx_head = (rx_head + 1) & (RX_BUFFER_LEN - 1);
+
+   /*
    rx_head++;
    if (rx_head >= RX_BUFFER_LEN) {
        rx_head = 0;
    }
+   */
 }
 
 /**
@@ -78,10 +82,15 @@ ISR(USART_UDRE_vect)
 
         UDR0 = tx_buffer[tx_tail];
         // Increment the tail index
+        tx_tail = (tx_tail + 1) & (TX_BUFFER_LEN - 1);
+
+        /*
         tx_tail++;
         if (tx_tail >= TX_BUFFER_LEN) {
             tx_tail = 0;
         }
+        */
+
     } else {
         PORTB &= ~(1 << PIN_LED); // Proof the interrupt is off
 
@@ -89,27 +98,6 @@ ISR(USART_UDRE_vect)
         UCSR0B &= ~(1 << UDRIE0);
     }
 }
-
-
-/**
- * Interrupt when the USART has sent a byte.
- */
-/*
-ISR(USART_TX_vect)
-{
-    // If head & tail are not in sync, send the next byte in byte.
-    if (tx_head != tx_tail) {
-        char c = tx_buffer[tx_tail];
-        // Increment the tail index
-        tx_tail++;
-        if (tx_tail >= TX_BUFFER_LEN) {
-            tx_tail = 0;
-        }
-        // Now send the byte.
-        UDR0 = c;
-    }
-}
-*/
 
 /********************************************************************************
 Main
@@ -148,11 +136,12 @@ int main (void)
             //PORTB ^= (1 << PIN_LED);
 
             // Heartbeat ( a few bytes to show it gets queued)
+            /*
             USART_Transmit(':');
             USART_Transmit('-');
             USART_Transmit(')');
             USART_Transmit('\n');
-
+            */
         }
 
     }
