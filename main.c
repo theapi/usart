@@ -12,7 +12,7 @@
 //#define UBRR (FOSC/16/BAUD-1)
 
 
-#define BAUD 57600
+#define BAUD 500000
 #include <util/setbaud.h>
 
 #define PIN_LED    PB5 // The led to blink
@@ -136,12 +136,12 @@ int main (void)
             //PORTB ^= (1 << PIN_LED);
 
             // Heartbeat ( a few bytes to show it gets queued)
-            /*
+
             USART_Transmit(':');
             USART_Transmit('-');
             USART_Transmit(')');
             USART_Transmit('\n');
-            */
+
         }
 
     }
