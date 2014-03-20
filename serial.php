@@ -1,6 +1,12 @@
 <?php
 
-exec('stty -F /dev/ttyUSB0 500000');
+/*
+cs8 = 8 bit characters
+-cstopb = one stop bit
+raw = no messing with the data, like adding newlines
+500000 = BAUD
+*/
+exec('stty -F /dev/ttyUSB0 cs8 -cstopb raw 500000');
 $fp =fopen("/dev/ttyUSB0", "w+");
 if( !$fp) {
         echo "Error";die();
