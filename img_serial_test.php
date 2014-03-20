@@ -24,8 +24,8 @@ if( !$fp) {
 $filename = "smiley.jpg";
 $size = filesize($filename);
 $imgFp = fopen($filename, "rb");
-// Need to read past the file size by a byte
-$contents = fread($imgFp, $size+1);
+// Need to read past the file size
+$contents = fread($imgFp, $size+10);
 fclose($imgFp);
 
 // Send the data to the arduino via serial.
